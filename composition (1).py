@@ -21,25 +21,27 @@ periodic_table = {
 # Function to parse the chemical formula
 def parse_formula(formula):
     # Pattern to match elements, counts, and groups with parentheses
-    pattern = r'([A-Z][a-z]?|\([^\(\)]+\))(\d*)'
+    #pattern = r'([A-Z][a-z]?|\([^\(\)]+\))(\d*)'
+    # new pattern to accept non integer numbers
+    pattern = r'([A-Z][a-z]?|\([^\(\)]+\))(\d*\.?\d*)'
     matches = re.findall(pattern, formula)
-    composition = defaultdict(int)
-    
-    def add_composition(comp_dict, multiplier=1):
+    composition = defaultdict(float)
+
+    def add_composition(comp_dict):
         for element, count in matches:
+            if count == '':
+                count = 1
+            else:
+                count = float(count)
             if element.startswith('('):
                 # Remove parentheses and parse the inner formula
                 inner_formula = element[1:-1]
                 inner_composition = parse_formula(inner_formula)
-                multiplier=int(count)
+
                 for inner_element, inner_count in inner_composition.items():
-                    comp_dict[inner_element] += inner_count * multiplier
+                    comp_dict[inner_element] += inner_count * count
             else:
-                if count == '':
-                    count = 1
-                else:
-                    count = int(count)
-                comp_dict[element] += count * multiplier
+                comp_dict[element] += count
     
     add_composition(composition)
     
@@ -58,7 +60,7 @@ def parse_prettyformula(formula):
 
 # Function to create the compositional vector
 def encode_compositional_vector(formula):
-    composition = parse_prettyformula(formula)
+    composition = parse_formula(formula)
     total_atoms = sum(composition.values())
     vector = [0] * len(periodic_table)  # Create a zero vector with length equal to the number of elements
     
@@ -69,9 +71,16 @@ def encode_compositional_vector(formula):
     return vector
 
 
-# input: list of prettyformula type materials
+#little test
+if True:
+    tests=["Na(OH)2", "NaCl", "H2O"]
+    for material in tests:
+        print(encode_compositional_vector(material))
+
+
+# input: list of materials
 # output: list of compositional vectors
-def convertFormulaToVector(formula:list):
+def convertFormulaToVectors(formula:list):
     output=list()
     for material in formula:
         output.append(encode_compositional_vector(material))
@@ -90,6 +99,7 @@ def concatenate(precursors:list, targets:list):
     return np.concatenate([np.concatenate(precursors),np.concatenate(targets)])
 
 #input: list of compositional vectors
+# output: ML ready summed up version
 def sumCompositional(precursors:list, targets:list):
     prec=list()
     for i in range(len(precursors[0])):
@@ -108,21 +118,51 @@ def sumCompositional(precursors:list, targets:list):
     return np.concatenate([prec,targ])
 
 
+#input: lhs and rhs to make it ML ready
+def transform(leftSide:str, rightSide:str):
+    leftSide.replace("[","(")
+    leftSide.replace("]",")")
+    leftSide.replace("·","+")
+    rightSide.replace("[","(")
+    rightSide.replace("]",")")
+    rightSide.replace("·","+")
+
+    precursors=leftSide.split("+")
+    precursors=list(map(str.strip, precursors))
+
+    targets=rightSide.split("+")
+    targets=list(map(str.strip, targets))
+
+    precVectors=convertFormulaToVectors(precursors)
+    targVectors=convertFormulaToVectors(targets)
+
+    #concatenate or sum
+
+    if True:
+        LMready=concatenate(precVectors,targVectors)
+    else:
+        LMready=sumCompositional(precVectors,targVectors)
 
 
 
 
-    
 
-# Example usage
-formulas = ["H2O", "NiO2H2", "C6H12O6", "Ca3P2O8"]
-prec=["H2O", "NaCl"]
-targ=["Fe3Na2","Ga4Ge2"]
 
-precursors=convertFormulaToVector(prec)
-targets=convertFormulaToVector(targ)
-conc=concatenate(precursors,targets)
-suM=sumCompositional(precursors,targets)
 
-print(len(suM))
+
+
+# some more tests
+if False:
+
+    # Example usage
+    formulas = ["H2O", "NiO2H2", "C6H12O6", "Ca3P2O8"]
+    prec=["H2O", "NaCl"]
+    targ=["Fe3Na2","Ga4Ge2"]
+
+    precursors=convertFormulaToVectors(prec)
+    targets=convertFormulaToVector(targ)
+    conc=concatenate(precursors,targets)
+    suM=sumCompositional(precursors,targets)
+
+    print(len(suM))
 
